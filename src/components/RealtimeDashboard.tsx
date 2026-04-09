@@ -1,53 +1,52 @@
 "use client"
 
-import { useRealtime } from "@/hooks/useRealtime"
-import { Activity, Package, DollarSign, Clock, CheckCircle, AlertCircle } from "lucide-react"
-import type {
-  CollectionUpdateEvent,
-  PriceUpdateEvent,
-  TransactionUpdateEvent,
-} from "@/lib/realtime"
+import { useState, useEffect } from "react"
+import { useCollectionUpdates, useTransactionUpdates, usePriceUpdates } from "@/hooks/useRealtime"
+import { Activity, TrendingUp, Package, DollarSign, Clock, CheckCircle, AlertCircle } from "lucide-react"
 
 interface LiveStats {
   totalCollections: number
   activeCollections: number
   completedCollections: number
   totalRevenue: number
-  recentTransactions: TransactionUpdateEvent[]
-  recentCollections: CollectionUpdateEvent[]
-  priceUpdates: PriceUpdateEvent[]
+  recentTransactions: any[]
+  recentCollections: any[]
+  priceUpdates: any[]
 }
 
 export default function RealtimeDashboard() {
-  const { events, isConnected } = useRealtime()
+  const collectionUpdates = useCollectionUpdates()
+  const transactionUpdates = useTransactionUpdates()
+  const priceUpdates = usePriceUpdates()
+  const [stats, setStats] = useState<LiveStats>({
+    totalCollections: 0,
+    activeCollections: 0,
+    completedCollections: 0,
+    totalRevenue: 0,
+    recentTransactions: [],
+    recentCollections: [],
+    priceUpdates: []
+  })
 
-  const collectionUpdates = events
-    .filter((event): event is Extract<typeof events[number], { type: "collection_update" }> => event.type === "collection_update")
-    .map((event) => event.data)
-
-  const transactionUpdates = events
-    .filter((event): event is Extract<typeof events[number], { type: "transaction_update" }> => event.type === "transaction_update")
-    .map((event) => event.data)
-
-  const priceUpdates = events
-    .filter((event): event is Extract<typeof events[number], { type: "price_update" }> => event.type === "price_update")
-    .map((event) => event.data)
-
-  const activeCollections = collectionUpdates.filter((collection) => collection.status === 'in_progress').length
-  const completedCollections = collectionUpdates.filter((collection) => collection.status === 'completed').length
-  const totalRevenue = transactionUpdates
+  useEffect(() => {
+    // Update stats based on real-time events
+    const activeCollections = collectionUpdates.filter(c => c.status === 'in_progress').length
+    const completedCollections = collectionUpdates.filter(c => c.status === 'completed').length
+    const totalRevenue = transactionUpdates
       .filter(t => t.status === 'completed')
       .reduce((sum, t) => sum + t.amount, 0)
 
-  const stats: LiveStats = {
-    totalCollections: collectionUpdates.length,
-    activeCollections,
-    completedCollections,
-    totalRevenue,
-    recentTransactions: [...transactionUpdates].slice(-5).reverse(),
-    recentCollections: [...collectionUpdates].slice(-5).reverse(),
-    priceUpdates: [...priceUpdates].slice(-3).reverse(),
-  }
+    setStats(prev => ({
+      ...prev,
+      totalCollections: collectionUpdates.length,
+      activeCollections,
+      completedCollections,
+      totalRevenue,
+      recentTransactions: transactionUpdates.slice(-5).reverse(),
+      recentCollections: collectionUpdates.slice(-5).reverse(),
+      priceUpdates: priceUpdates.slice(-3).reverse()
+    }))
+  }, [collectionUpdates, transactionUpdates, priceUpdates])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -220,8 +219,8 @@ export default function RealtimeDashboard() {
 
       {/* Live Indicator */}
       <div className="flex items-center gap-2 text-sm text-slate-600">
-        <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 animate-pulse" : "bg-slate-300"}`} />
-        <span>{isConnected ? "Live updates active" : "Waiting for live connection"}</span>
+        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+        <span>Live updates active</span>
       </div>
     </div>
   )

@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     for (let i = 0; i < count; i++) {
       switch (eventType) {
         case 'collection_update':
-          const statuses = ['scheduled', 'in_progress', 'completed', 'cancelled']
+          const statuses: Array<'scheduled' | 'in_progress' | 'completed' | 'cancelled'> = ['scheduled', 'in_progress', 'completed', 'cancelled']
           const randomStatus = statuses[Math.floor(Math.random() * statuses.length)]
           
           realtimeManager.emitCollectionUpdate({
@@ -36,8 +36,8 @@ export async function POST(request: Request) {
           break
 
         case 'transaction_update':
-          const transactionTypes = ['sale', 'purchase', 'payment']
-          const transactionStatuses = ['pending', 'completed', 'failed']
+          const transactionTypes: Array<'sale' | 'purchase' | 'payment'> = ['sale', 'purchase', 'payment']
+          const transactionStatuses: Array<'pending' | 'completed' | 'failed'> = ['pending', 'completed', 'failed']
           const randomType = transactionTypes[Math.floor(Math.random() * transactionTypes.length)]
           const randomTransactionStatus = transactionStatuses[Math.floor(Math.random() * transactionStatuses.length)]
           const amount = Math.floor(Math.random() * 10000) + 100

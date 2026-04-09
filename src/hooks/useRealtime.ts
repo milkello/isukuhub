@@ -1,46 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useSession } from "next-auth/react"
-import type {
-  CollectionUpdateEvent,
-  PriceUpdateEvent,
-  RealtimeEventName,
-  RealtimeEventPayloadMap,
-  SystemNotificationEvent,
-  TransactionUpdateEvent,
-} from "@/lib/realtime"
 
-const MAX_EVENTS = 100
-
-export type RealtimeEvent = {
-  [K in RealtimeEventName]: {
-    type: K
-    data: RealtimeEventPayloadMap[K]
-    timestamp: string
-  }
-}[RealtimeEventName]
-
-function appendRealtimeEvent<T extends RealtimeEventName>(
-  setEvents: React.Dispatch<React.SetStateAction<RealtimeEvent[]>>,
-  type: T,
-  data: RealtimeEventPayloadMap[T],
-) {
-  setEvents((previousEvents) => [
-    ...previousEvents.slice(-(MAX_EVENTS - 1)),
-    { type, data, timestamp: new Date().toISOString() },
-  ])
-}
-
-function getRealtimePayloads<T extends RealtimeEventName>(
-  events: RealtimeEvent[],
-  type: T,
-): Array<RealtimeEventPayloadMap[T]> {
-  return events
-    .filter(
-      (event): event is Extract<RealtimeEvent, { type: T }> => event.type === type,
-    )
-    .map((event) => event.data)
+export interface RealtimeEvent {
+  type: string
+  data: any
+  timestamp: string
 }
 
 export function useRealtime(userId?: string) {
@@ -48,8 +14,6 @@ export function useRealtime(userId?: string) {
   const [isConnected, setIsConnected] = useState(false)
   const [events, setEvents] = useState<RealtimeEvent[]>([])
   const eventSourceRef = useRef<EventSource | null>(null)
-  timestamp: string
-}
 
   useEffect(() => {
     const currentUserId = userId || session?.user?.id
@@ -73,44 +37,31 @@ export function useRealtime(userId?: string) {
     })
 
     eventSource.addEventListener('collection_update', (event) => {
-      appendRealtimeEvent(
-        setEvents,
-        'collection_update',
-        JSON.parse(event.data) as CollectionUpdateEvent,
-      )
+      const data = JSON.parse(event.data)
+      setEvents(prev => [...prev, { type: 'collection_update', data, timestamp: new Date().toISOString() }])
     })
 
     eventSource.addEventListener('transaction_update', (event) => {
-      appendRealtimeEvent(
-        setEvents,
-        'transaction_update',
-        JSON.parse(event.data) as TransactionUpdateEvent,
-      )
+      const data = JSON.parse(event.data)
+      setEvents(prev => [...prev, { type: 'transaction_update', data, timestamp: new Date().toISOString() }])
     })
 
     eventSource.addEventListener('system_notification', (event) => {
-      appendRealtimeEvent(
-        setEvents,
-        'system_notification',
-        JSON.parse(event.data) as SystemNotificationEvent,
-      )
+      const data = JSON.parse(event.data)
+      setEvents(prev => [...prev, { type: 'system_notification', data, timestamp: new Date().toISOString() }])
     })
 
     eventSource.addEventListener('price_update', (event) => {
-      appendRealtimeEvent(
-        setEvents,
-        'price_update',
-        JSON.parse(event.data) as PriceUpdateEvent,
-      )
+      const data = JSON.parse(event.data)
+      setEvents(prev => [...prev, { type: 'price_update', data, timestamp: new Date().toISOString() }])
     })
 
-    eventSource.addEventListener('heartbeat', () => {
+    eventSource.addEventListener('heartbeat', (event) => {
       console.log('SSE heartbeat received')
     })
 
     return () => {
       eventSource.close()
-      eventSourceRef.current = null
       setIsConnected(false)
     }
   }, [userId, session?.user?.id])
@@ -126,22 +77,58 @@ export function useRealtime(userId?: string) {
   }
 }
 
-export function useCollectionUpdates(userId?: string) {
-  const { events } = useRealtime(userId)
-  return getRealtimePayloads(events, 'collection_update')
+export function useCollectionUpdates() {
+  const { events } = useRealtime()
+  const [collectionUpdates, setCollectionUpdates] = useState<any[]>([])
+
+  useEffect(() => {
+    const updates = events
+      .filter(event => event.type === 'collection_update')
+      .map(event => event.data)
+    setCollectionUpdates(updates)
+  }, [events])
+
+  return collectionUpdates
 }
 
-export function useTransactionUpdates(userId?: string) {
-  const { events } = useRealtime(userId)
-  return getRealtimePayloads(events, 'transaction_update')
+export function useTransactionUpdates() {
+  const { events } = useRealtime()
+  const [transactionUpdates, setTransactionUpdates] = useState<any[]>([])
+
+  useEffect(() => {
+    const updates = events
+      .filter(event => event.type === 'transaction_update')
+      .map(event => event.data)
+    setTransactionUpdates(updates)
+  }, [events])
+
+  return transactionUpdates
 }
 
-export function useSystemNotifications(userId?: string) {
-  const { events } = useRealtime(userId)
-  return getRealtimePayloads(events, 'system_notification')
+export function useSystemNotifications() {
+  const { events } = useRealtime()
+  const [notifications, setNotifications] = useState<any[]>([])
+
+  useEffect(() => {
+    const notifs = events
+      .filter(event => event.type === 'system_notification')
+      .map(event => event.data)
+    setNotifications(notifs)
+  }, [events])
+
+  return notifications
 }
 
-export function usePriceUpdates(userId?: string) {
-  const { events } = useRealtime(userId)
-  return getRealtimePayloads(events, 'price_update')
+export function usePriceUpdates() {
+  const { events } = useRealtime()
+  const [priceUpdates, setPriceUpdates] = useState<any[]>([])
+
+  useEffect(() => {
+    const updates = events
+      .filter(event => event.type === 'price_update')
+      .map(event => event.data)
+    setPriceUpdates(updates)
+  }, [events])
+
+  return priceUpdates
 }
