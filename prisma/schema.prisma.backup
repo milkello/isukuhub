@@ -1,0 +1,698 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+/**
+ * User model with role-based authentication
+ * Supports multiple user types: ADMIN, AGENT, HOUSEHOLD, RECYCLER, INVESTOR, GOVERNMENT
+ */
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String   // Hashed password
+  role      UserRole
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations based on role
+  agentProfile      AgentProfile?
+  householdProfile  HouseholdProfile?
+  recyclerProfile   RecyclerProfile?
+  investorProfile   InvestorProfile?
+  governmentProfile  GovernmentProfile?
+  
+  // Collections and transactions
+  collections       Collection[]
+  transactions      Transaction[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+
+  @@map("users")
+}
+
+/**
+ * User role enum for role-based access control
+ */
+enum UserRole {
+  ADMIN
+  AGENT
+  HOUSEHOLD
+  RECYCLER
+  INVESTOR
+  GOVERNMENT
+}
+
+/**
+ * Agent profile for waste collection agents
+ */
+model AgentProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  employeeId   String   @unique
+  department   String
+  vehicleType  String?
+  licensePlate String?
+  status       AgentStatus @default(ACTIVE)
+  hireDate     DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relations
+  collections Collection[]
+  routes      Route[]
+
+  @@map("agent_profiles")
+}
+
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
+/**
+ * Household profile for residential users
+ */
+model HouseholdProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  householdSize   Int
+  subscriptionPlan SubscriptionPlan @default(BASIC)
+  billingCycle    BillingCycle @default(MONTHLY)
+  address         String
+  coordinates     String? // GPS coordinates
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relations
+  collections Collection[]
+  subscriptions Subscription[]
+  payments     Payment[]
+
+  @@map("household_profiles")
+}
+
+enum SubscriptionPlan {
+  BASIC
+  PREMIUM
+  ENTERPRISE
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+/**
+ * Recycler profile for recycling companies
+ */
+model RecyclerProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  companyName     String
+  registrationNumber String @unique
+  licenseNumber   String?
+  contactPerson   String
+  businessType    String
+  capacity        Float? // Processing capacity in tons
+  certifications  String? // JSON array of certifications
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relations
+  materials      Material[]
+  purchases      Purchase[]
+  sales          Sale[]
+
+  @@map("recycler_profiles")
+}
+
+/**
+ * Investor profile for investors
+ */
+model InvestorProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  investorType    InvestorType
+  investmentFocus String?
+  portfolioSize   Float?
+  riskTolerance   RiskLevel @default(MEDIUM)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relations
+  investments     Investment[]
+  contracts       Contract[]
+
+  @@map("investor_profiles")
+}
+
+enum InvestorType {
+  INDIVIDUAL
+  INSTITUTIONAL
+  VENTURE_CAPITAL
+  ANGEL
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+/**
+ * Government profile for government officials
+ */
+model GovernmentProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  department      String
+  position        String
+  jurisdiction    String
+  accessLevel     AccessLevel @default(BASIC)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relations
+  reports         Report[]
+  regulations     Regulation[]
+
+  @@map("government_profiles")
+}
+
+enum AccessLevel {
+  BASIC
+  INTERMEDIATE
+  SENIOR
+  ADMIN
+}
+
+/**
+ * Waste collection records
+ */
+model Collection {
+  id            String           @id @default(cuid())
+  collectionId  String           @unique // Unique collection identifier
+  householdId   String
+  agentId       String
+  wasteType     WasteType
+  weight        Float
+  status        CollectionStatus @default(SCHEDULED)
+  scheduledDate DateTime
+  completedDate DateTime?
+  notes         String?
+  photos        String? // JSON array of photo URLs
+  location      String? // GPS coordinates
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  // Relations
+  household     User             @relation(fields: [householdId], references: [id])
+  agent         User             @relation(fields: [agentId], references: [id])
+  transactions  Transaction[]
+
+  @@map("collections")
+}
+
+enum WasteType {
+  GENERAL_WASTE
+  RECYCLABLE
+  ORGANIC
+  HAZARDOUS
+  ELECTRONIC
+  CONSTRUCTION
+}
+
+enum CollectionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+/**
+ * Materials available for recycling
+ */
+model Material {
+  id              String         @id @default(cuid())
+  recyclerId      String
+  name            String
+  category        MaterialCategory
+  description     String?
+  pricePerKg      Float
+  availableWeight Float
+  quality         QualityLevel   @default(STANDARD)
+  location        String
+  photos          String?        // JSON array of photo URLs
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  // Relations
+  recycler        User           @relation(fields: [recyclerId], references: [id])
+  purchases       Purchase[]
+  sales           Sale[]
+
+  @@map("materials")
+}
+
+enum MaterialCategory {
+  PLASTIC
+  PAPER
+  METAL
+  GLASS
+  ORGANIC
+  ELECTRONIC
+  TEXTILE
+  RUBBER
+  BATTERY
+  OTHER
+}
+
+enum QualityLevel {
+  LOW
+  STANDARD
+  PREMIUM
+  EXCELLENT
+}
+
+/**
+ * Purchase transactions for materials
+ */
+model Purchase {
+  id            String      @id @default(cuid())
+  materialId    String
+  buyerId       String      // Household or other recycler
+  sellerId      String      // Recycler
+  weight        Float
+  pricePerKg    Float
+  totalPrice    Float
+  status        TransactionStatus @default(PENDING)
+  purchaseDate  DateTime    @default(now())
+  deliveryDate  DateTime?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  material      Material    @relation(fields: [materialId], references: [id])
+  buyer         User        @relation(fields: [buyerId], references: [id])
+  seller        User        @relation(fields: [sellerId], references: [id])
+  payments      Payment[]
+
+  @@map("purchases")
+}
+
+/**
+ * Sales transactions for materials
+ */
+model Sale {
+  id            String      @id @default(cuid())
+  materialId    String
+  sellerId      String      // Recycler
+  buyerId       String      // Household or other recycler
+  weight        Float
+  pricePerKg    Float
+  totalPrice    Float
+  status        TransactionStatus @default(PENDING)
+  saleDate      DateTime    @default(now())
+  deliveryDate  DateTime?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  material      Material    @relation(fields: [materialId], references: [id])
+  seller        User        @relation(fields: [sellerId], references: [id])
+  buyer         User        @relation(fields: [buyerId], references: [id])
+  payments      Payment[]
+
+  @@map("sales")
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+/**
+ * Payment records
+ */
+model Payment {
+  id            String      @id @default(cuid())
+  userId        String
+  transactionId String?     // Reference to purchase or sale
+  amount        Float
+  currency      String      @default("USD")
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  paymentDate   DateTime    @default(now())
+  processedDate DateTime?
+  transactionRef String?    // External transaction reference
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  user          User        @relation(fields: [userId], references: [id])
+  purchase      Purchase?   @relation(fields: [transactionId], references: [id])
+  sale          Sale?       @relation(fields: [transactionId], references: [id])
+  subscription  Subscription?
+
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  MOBILE_MONEY
+  CRYPTOCURRENCY
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+/**
+ * Subscription records for households
+ */
+model Subscription {
+  id              String           @id @default(cuid())
+  householdId     String
+  plan            SubscriptionPlan
+  billingCycle    BillingCycle
+  amount          Float
+  currency        String           @default("USD")
+  status          SubscriptionStatus @default(ACTIVE)
+  startDate       DateTime         @default(now())
+  endDate         DateTime
+  nextBillingDate DateTime
+  autoRenew       Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  household       User             @relation(fields: [householdId], references: [id])
+  payments        Payment[]
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+  EXPIRED
+}
+
+/**
+ * Investment records
+ */
+model Investment {
+  id              String      @id @default(cuid())
+  investorId      String
+  contractId      String?
+  type            InvestmentType
+  amount          Float
+  currency        String      @default("USD")
+  expectedReturn  Float?
+  actualReturn    Float?
+  status          InvestmentStatus @default(ACTIVE)
+  investmentDate  DateTime    @default(now())
+  maturityDate    DateTime?
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  investor        User        @relation(fields: [investorId], references: [id])
+  contract        Contract?   @relation(fields: [contractId], references: [id])
+
+  @@map("investments")
+}
+
+enum InvestmentType {
+  DIRECT
+  FUND
+  BOND
+  EQUITY
+  CROWDFUNDING
+}
+
+enum InvestmentStatus {
+  ACTIVE
+  MATURED
+  CLOSED
+  DEFAULTED
+}
+
+/**
+ * Contracts between investors and companies
+ */
+model Contract {
+  id              String      @id @default(cuid())
+  name            String
+  description     String?
+  type            ContractType
+  amount          Float
+  currency        String      @default("USD")
+  interestRate    Float?
+  duration        Int         // Duration in months
+  status          ContractStatus @default(DRAFT)
+  startDate       DateTime?
+  endDate         DateTime?
+  terms           String      // JSON object with contract terms
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  investor        User        @relation(fields: [investorId], references: [id])
+  investments     Investment[]
+
+  @@map("contracts")
+}
+
+enum ContractType {
+  LOAN
+  EQUITY
+  SERVICE
+  SUPPLY
+  PARTNERSHIP
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING
+  ACTIVE
+  COMPLETED
+  TERMINATED
+  BREACHED
+}
+
+/**
+ * Route planning for agents
+ */
+model Route {
+  id          String   @id @default(cuid())
+  agentId     String
+  name        String
+  description String?
+  waypoints   String   // JSON array of route waypoints
+  distance    Float?   // Total distance in km
+  estimatedTime Int?    // Estimated time in minutes
+  status      RouteStatus @default(PLANNED)
+  plannedDate DateTime @default(now())
+  completedDate DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  agent       AgentProfile @relation(fields: [agentId], references: [id])
+
+  @@map("routes")
+}
+
+enum RouteStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+/**
+ * Notifications for users
+ */
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  data      String?          // JSON object with additional data
+  createdAt DateTime         @default(now())
+
+  // Relations
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  COLLECTION_SCHEDULED
+  COLLECTION_COMPLETED
+  PAYMENT_RECEIVED
+  PAYMENT_FAILED
+  SUBSCRIPTION_RENEWAL
+  MATERIAL_AVAILABLE
+  INVESTMENT_OPPORTUNITY
+  SYSTEM_UPDATE
+  ALERT
+}
+
+/**
+ * Audit logs for tracking system activity
+ */
+model AuditLog {
+  id        String       @id @default(cuid())
+  userId    String
+  action    String
+  resource  String
+  details   String?      // JSON object with action details
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime     @default(now())
+
+  // Relations
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+/**
+ * Government reports
+ */
+model Report {
+  id          String     @id @default(cuid())
+  governmentId String
+  title       String
+  type        ReportType
+  content     String     // JSON object with report data
+  period      String     // Reporting period (e.g., "2024-Q1")
+  status      ReportStatus @default(DRAFT)
+  generatedAt DateTime   @default(now())
+  publishedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  government  User       @relation(fields: [governmentId], references: [id])
+
+  @@map("reports")
+}
+
+enum ReportType {
+  COLLECTION_STATS
+  RECYCLING_RATE
+  ENVIRONMENTAL_IMPACT
+  COMPLIANCE
+  FINANCIAL
+  OPERATIONAL
+}
+
+enum ReportStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+/**
+ * Government regulations
+ */
+model Regulation {
+  id            String           @id @default(cuid())
+  governmentId   String
+  title         String
+  description   String
+  type          RegulationType
+  requirements  String           // JSON object with requirements
+  penalties     String?          // JSON object with penalties
+  effectiveDate DateTime
+  expiryDate    DateTime?
+  status        RegulationStatus @default(ACTIVE)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  // Relations
+  government    User             @relation(fields: [governmentId], references: [id])
+
+  @@map("regulations")
+}
+
+enum RegulationType {
+  WASTE_MANAGEMENT
+  RECYCLING
+  ENVIRONMENTAL
+  HEALTH_SAFETY
+  TRANSPORTATION
+  BUSINESS
+}
+
+enum RegulationStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  REPEALED
+}
+
+/**
+ * Transaction records for financial tracking
+ */
+model Transaction {
+  id            String           @id @default(cuid())
+  userId        String
+  type          TransactionType
+  amount        Float
+  currency      String           @default("USD")
+  description   String
+  referenceId   String?          // Reference to related entity
+  status        TransactionStatus @default(PENDING)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  // Relations
+  user          User             @relation(fields: [userId], references: [id])
+  collection    Collection?      @relation(fields: [referenceId], references: [id])
+
+  @@map("transactions")
+}
+
+enum TransactionType {
+  COLLECTION_FEE
+  SUBSCRIPTION
+  MATERIAL_PURCHASE
+  MATERIAL_SALE
+  INVESTMENT_RETURN
+  PENALTY
+  REFUND
+  BONUS
+}
