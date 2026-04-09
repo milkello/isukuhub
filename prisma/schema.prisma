@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   // ADMIN, AGENT, HOUSEHOLD, RECYCLER, INVESTOR, GOVERNMENT
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agentProfile      AgentProfile?
+  householdProfile  HouseholdProfile?
+  recyclerProfile   RecyclerProfile?
+  investorProfile   InvestorProfile?
+  governmentProfile  GovernmentProfile?
+  
+  collections       Collection[] @relation("HouseholdCollections")
+  agentCollections  Collection[] @relation("AgentCollections")
+  transactions      Transaction[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  reports           Report[] @relation("GovernmentReports")
+  regulations       Regulation[] @relation("GovernmentRegulations")
+  investments       Investment[] @relation("UserInvestments")
+  materials         Material[] @relation("RecyclerMaterials")
+
+  @@map("users")
+}
+
+model AgentProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  employeeId   String   @unique
+  department   String
+  vehicleType  String?
+  licensePlate String?
+  status       String   @default("ACTIVE") // ACTIVE, INACTIVE, ON_LEAVE
+  hireDate     DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  routes      Route[]
+
+  @@map("agent_profiles")
+}
+
+model HouseholdProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  householdSize   Int
+  subscriptionPlan String   @default("BASIC") // BASIC, PREMIUM, ENTERPRISE
+  billingCycle    String   @default("MONTHLY") // MONTHLY, QUARTERLY, YEARLY
+  address         String
+  coordinates     String?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("household_profiles")
+}
+
+model RecyclerProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  companyName     String
+  registrationNumber String @unique
+  licenseNumber   String?
+  contactPerson   String
+  businessType    String
+  capacity        Float?
+  certifications  String?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("recycler_profiles")
+}
+
+model InvestorProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  investorType    String   // INDIVIDUAL, INSTITUTIONAL, VENTURE_CAPITAL, ANGEL
+  investmentFocus String?
+  portfolioSize   Float?
+  riskTolerance   String   @default("MEDIUM") // LOW, MEDIUM, HIGH
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("investor_profiles")
+}
+
+model GovernmentProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  department      String
+  position        String
+  jurisdiction    String
+  accessLevel     String   @default("BASIC") // BASIC, INTERMEDIATE, SENIOR, ADMIN
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("government_profiles")
+}
+
+model Collection {
+  id            String   @id @default(cuid())
+  collectionId  String   @unique
+  householdId   String
+  agentId       String
+  wasteType     String   // GENERAL_WASTE, RECYCLABLE, ORGANIC, HAZARDOUS, ELECTRONIC, CONSTRUCTION
+  weight        Float
+  status        String   @default("SCHEDULED") // SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED, FAILED
+  scheduledDate DateTime
+  completedDate DateTime?
+  notes         String?
+  photos        String?
+  location      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  household     User     @relation("HouseholdCollections", fields: [householdId], references: [id])
+  agent         User     @relation("AgentCollections", fields: [agentId], references: [id])
+  transactions  Transaction[]
+
+  @@map("collections")
+}
+
+model Material {
+  id              String   @id @default(cuid())
+  recyclerId      String
+  name            String
+  category        String   // PLASTIC, PAPER, METAL, GLASS, ORGANIC, ELECTRONIC, TEXTILE, RUBBER, BATTERY, OTHER
+  description     String?
+  pricePerKg      Float
+  availableWeight Float
+  quality         String   @default("STANDARD") // LOW, STANDARD, PREMIUM, EXCELLENT
+  location        String
+  photos          String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  recycler        User     @relation("RecyclerMaterials", fields: [recyclerId], references: [id])
+
+  @@map("materials")
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  userId        String
+  type          String   // COLLECTION_FEE, SUBSCRIPTION, MATERIAL_PURCHASE, MATERIAL_SALE, INVESTMENT_RETURN, PENALTY, REFUND, BONUS
+  amount        Float
+  currency      String   @default("USD")
+  description   String
+  referenceId   String?
+  status        String   @default("PENDING") // PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED, REFUNDED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id])
+  collection    Collection? @relation(fields: [referenceId], references: [id])
+
+  @@map("transactions")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // COLLECTION_SCHEDULED, COLLECTION_COMPLETED, PAYMENT_RECEIVED, PAYMENT_FAILED, SUBSCRIPTION_RENEWAL, MATERIAL_AVAILABLE, INVESTMENT_OPPORTUNITY, SYSTEM_UPDATE, ALERT
+  isRead    Boolean  @default(false)
+  data      String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  resource  String
+  details   String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  governmentId String
+  title       String
+  type        String   // COLLECTION_STATS, RECYCLING_RATE, ENVIRONMENTAL_IMPACT, COMPLIANCE, FINANCIAL, OPERATIONAL
+  content     String
+  period      String
+  status      String   @default("DRAFT") // DRAFT, PENDING_REVIEW, APPROVED, PUBLISHED, ARCHIVED
+  generatedAt DateTime @default(now())
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  government  User     @relation("GovernmentReports", fields: [governmentId], references: [id])
+
+  @@map("reports")
+}
+
+model Regulation {
+  id            String   @id @default(cuid())
+  governmentId   String
+  title         String
+  description   String
+  type          String   // WASTE_MANAGEMENT, RECYCLING, ENVIRONMENTAL, HEALTH_SAFETY, TRANSPORTATION, BUSINESS
+  requirements  String
+  penalties     String?
+  effectiveDate DateTime
+  expiryDate    DateTime?
+  status        String   @default("ACTIVE") // ACTIVE, SUSPENDED, EXPIRED, REPEALED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  government    User     @relation("GovernmentRegulations", fields: [governmentId], references: [id])
+
+  @@map("regulations")
+}
+
+model Investment {
+  id              String   @id @default(cuid())
+  investorId      String
+  type            String   // DIRECT, FUND, BOND, EQUITY, CROWDFUNDING
+  amount          Float
+  currency        String   @default("USD")
+  expectedReturn  Float?
+  actualReturn    Float?
+  status          String   @default("ACTIVE") // ACTIVE, MATURED, CLOSED, DEFAULTED
+  investmentDate  DateTime @default(now())
+  maturityDate    DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  investor        User     @relation("UserInvestments", fields: [investorId], references: [id])
+
+  @@map("investments")
+}
+
+model Route {
+  id          String   @id @default(cuid())
+  agentId     String
+  name        String
+  description String?
+  waypoints   String
+  distance    Float?
+  estimatedTime Int?
+  status      String   @default("PLANNED") // PLANNED, ACTIVE, COMPLETED, CANCELLED
+  plannedDate DateTime @default(now())
+  completedDate DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agent       AgentProfile @relation(fields: [agentId], references: [id])
+
+  @@map("routes")
+}
