@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import {
@@ -17,7 +18,6 @@ import { ensureDemoData } from "@/lib/demo";
 import { prisma } from "@/lib/prisma";
 import { getServerAuthSession } from "@/lib/session";
 
-export const dynamic = "force-dynamic";
 
 type PortalCard = {
   title: string;
